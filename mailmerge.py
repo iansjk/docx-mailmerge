@@ -1,4 +1,5 @@
 from copy import deepcopy
+from io import BytesIO
 import re
 import warnings
 from lxml.etree import Element
@@ -18,6 +19,12 @@ CONTENT_TYPES_PARTS = (
 )
 
 CONTENT_TYPE_SETTINGS = 'application/vnd.openxmlformats-officedocument.wordprocessingml.settings+xml'
+
+HTML_TAG_MAPPING = {
+    "em": "i",
+    "strong": "b",
+    "u": "u"
+}
 
 
 class MailMerge(object):
@@ -156,7 +163,6 @@ class MailMerge(object):
         if not separator in valid_separators:
             raise ValueError("Invalid separator argument")
         type, sepClass = separator.split("_")
-  
 
         #GET ROOT - WORK WITH DOCUMENT
         for part in self.parts.values():
@@ -242,7 +248,7 @@ class MailMerge(object):
                       stacklevel=2)         
          self.merge_templates(replacements, "page_break")
 
-    def merge(self, parts=None, **replacements):
+    def merge(self, parts=None, html=False, **replacements):
         if not parts:
             parts = self.parts.values()
 
@@ -251,7 +257,42 @@ class MailMerge(object):
                 self.merge_rows(field, replacement)
             else:
                 for part in parts:
-                    self.__merge_field(part, field, replacement)
+                    if html:
+                        self.__merge_html_field(part, field, replacement)
+                    else:
+                        self.__merge_field(part, field, replacement)
+
+    def __merge_html_field(self, part, field, html):
+        for mf in part.findall('.//MergeField[@name="%s"]' % field):
+            nodes = []
+            current_run = Element('{%(w)s}r' % NAMESPACES)
+            formatting_node = None
+            context = etree.iterparse(BytesIO(html), html=True, events=("start", "end"))
+            for event, element in context:
+                if event == "start":
+                    if element.tag in ("em", "strong", "u"):
+                        if formatting_node is None:
+                            formatting_node = Element('{%(w)s}rPr' % NAMESPACES)
+                        format_node = Element('{%s}%s' % (NAMESPACES["w"], HTML_TAG_MAPPING[element.tag]))
+                        if element.tag == "u":
+                            format_node.set('{%(w)s}val' % NAMESPACES, "single")
+                        formatting_node.append(format_node)
+                elif event == "end":
+                    if formatting_node is not None:
+                        current_run.insert(0, formatting_node)
+                        formatting_node = None
+                    if element.text:
+                        text_node = Element('{%(w)s}t' % NAMESPACES)
+                        text_node.text = element.text
+                        current_run.append(text_node)
+                    if element.tail:
+                        current_run.append(Element('{%(w)s}br' % NAMESPACES))
+                    if current_run.getchildren():
+                        nodes.append(current_run)
+                        current_run = Element('{%(w)s}r' % NAMESPACES)
+            parent = mf.getparent()
+            parent.remove(mf)
+            parent.extend(nodes)
 
     def __merge_field(self, part, field, text):
         for mf in part.findall('.//MergeField[@name="%s"]' % field):
