@@ -10,6 +10,7 @@ NAMESPACES = {
     'w': 'http://schemas.openxmlformats.org/wordprocessingml/2006/main',
     'mc': 'http://schemas.openxmlformats.org/markup-compatibility/2006',
     'ct': 'http://schemas.openxmlformats.org/package/2006/content-types',
+    'xml': 'http://www.w3.org/XML/1998/namespace'
 }
 
 CONTENT_TYPES_PARTS = (
@@ -267,9 +268,17 @@ class MailMerge(object):
             nodes = []
             current_run = Element('{%(w)s}r' % NAMESPACES)
             formatting_node = None
+            text_node = Element('{%(w)s}t' % NAMESPACES, **{'{%(xml)s}space' % NAMESPACES: "preserve"})
             context = etree.iterparse(BytesIO(html), html=True, events=("start", "end"))
             for event, element in context:
                 if event == "start":
+                    if element.text:
+                        if text_node.text:
+                            current_run.append(text_node)
+                            nodes.append(current_run)
+                            current_run = Element('{%(w)s}r' % NAMESPACES)
+                            text_node = Element('{%(w)s}t' % NAMESPACES, **{'{%(xml)s}space' % NAMESPACES: "preserve"})
+                        text_node.text = element.text
                     if element.tag in ("em", "strong", "u"):
                         if formatting_node is None:
                             formatting_node = Element('{%(w)s}rPr' % NAMESPACES)
@@ -281,15 +290,13 @@ class MailMerge(object):
                     if formatting_node is not None:
                         current_run.insert(0, formatting_node)
                         formatting_node = None
-                    if element.text:
-                        text_node = Element('{%(w)s}t' % NAMESPACES)
-                        text_node.text = element.text
-                        current_run.append(text_node)
                     if element.tail:
-                        current_run.append(Element('{%(w)s}br' % NAMESPACES))
-                    if current_run.getchildren():
-                        nodes.append(current_run)
-                        current_run = Element('{%(w)s}r' % NAMESPACES)
+                        if text_node.text:
+                            current_run.append(text_node)
+                            nodes.append(current_run)
+                            current_run = Element('{%(w)s}r' % NAMESPACES)
+                            text_node = Element('{%(w)s}t' % NAMESPACES, **{'{%(xml)s}space' % NAMESPACES: "preserve"})
+                        text_node.text = element.tail
             parent = mf.getparent()
             parent.remove(mf)
             parent.extend(nodes)
