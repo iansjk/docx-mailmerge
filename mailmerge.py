@@ -266,37 +266,29 @@ class MailMerge(object):
     def __merge_html_field(self, part, field, html):
         for mf in part.findall('.//MergeField[@name="%s"]' % field):
             nodes = []
-            current_run = Element('{%(w)s}r' % NAMESPACES)
-            formatting_node = None
-            text_node = Element('{%(w)s}t' % NAMESPACES, **{'{%(xml)s}space' % NAMESPACES: "preserve"})
-            context = etree.iterparse(BytesIO(html.encode("utf-8")), html=True, events=("start", "end"))
+            root = etree.HTML(html)
+            context = etree.iterwalk(root, events=("start", "end"))
             for event, element in context:
                 if event == "start":
                     if element.text:
-                        if text_node.text:
-                            current_run.append(text_node)
-                            nodes.append(current_run)
-                            current_run = Element('{%(w)s}r' % NAMESPACES)
-                            text_node = Element('{%(w)s}t' % NAMESPACES, **{'{%(xml)s}space' % NAMESPACES: "preserve"})
-                        text_node.text = element.text
-                    if element.tag in ("em", "strong", "u"):
-                        if formatting_node is None:
+                        current_run = Element('{%(w)s}r' % NAMESPACES)
+                        if element.tag in ("em", "strong", "u"):
                             formatting_node = Element('{%(w)s}rPr' % NAMESPACES)
-                        format_node = Element('{%s}%s' % (NAMESPACES["w"], HTML_TAG_MAPPING[element.tag]))
-                        if element.tag == "u":
-                            format_node.set('{%(w)s}val' % NAMESPACES, "single")
-                        formatting_node.append(format_node)
-                elif event == "end":
-                    if formatting_node is not None:
-                        current_run.insert(0, formatting_node)
-                        formatting_node = None
+                            format_node = Element('{%s}%s' % (NAMESPACES["w"], HTML_TAG_MAPPING[element.tag]))
+                            if element.tag == "u":
+                                format_node.set('{%(w)s}val' % NAMESPACES, "single")
+                            formatting_node.append(format_node)
+                            current_run.insert(0, formatting_node)
+                        text_node = Element('{%(w)s}t' % NAMESPACES, **{'{%(xml)s}space' % NAMESPACES: "preserve"})
+                        text_node.text = element.text
+                        current_run.append(text_node)
+                        nodes.append(current_run)
                     if element.tail:
-                        if text_node.text:
-                            current_run.append(text_node)
-                            nodes.append(current_run)
-                            current_run = Element('{%(w)s}r' % NAMESPACES)
-                            text_node = Element('{%(w)s}t' % NAMESPACES, **{'{%(xml)s}space' % NAMESPACES: "preserve"})
+                        current_run = Element('{%(w)s}r' % NAMESPACES)
+                        text_node = Element('{%(w)s}t' % NAMESPACES, **{'{%(xml)s}space' % NAMESPACES: "preserve"})
                         text_node.text = element.tail
+                        current_run.append(text_node)
+                        nodes.append(current_run)
             parent = mf.getparent()
             parent.remove(mf)
             parent.extend(nodes)
