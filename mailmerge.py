@@ -21,12 +21,14 @@ CONTENT_TYPES_PARTS = (
 
 CONTENT_TYPE_SETTINGS = 'application/vnd.openxmlformats-officedocument.wordprocessingml.settings+xml'
 
-HTML_TAG_MAPPING = {
-    "em": "i",
-    "strong": "b",
-    "u": "u"
-}
+def html_format_to_word_format(tag):
+    if tag == "em":
+        return "i"
+    elif tag == "strong":
+        return "b"
+    return tag
 
+INLINE_FORMAT_TAGS = ("em", "i", "strong", "b", "u")
 
 class MailMerge(object):
     def __init__(self, file, remove_empty_tables=False):
@@ -274,8 +276,8 @@ class MailMerge(object):
             current_run = Element('{%(w)s}r' % NAMESPACES)
             for event, element in context:
                 if event == "start":
-                    if element.tag in ("em", "strong", "u"):
-                        format_stack.add(element.tag)
+                    if element.tag in INLINE_FORMAT_TAGS:
+                        format_stack.add(html_format_to_word_format(element.tag))
                         format_anchor = current_run
                     if element.text:
                         text_node = Element('{%(w)s}t' % NAMESPACES, **{'{%(xml)s}space' % NAMESPACES: "preserve"})
@@ -284,14 +286,14 @@ class MailMerge(object):
                         nodes.append(current_run)
                         current_run = Element('{%(w)s}r' % NAMESPACES)
                 elif event == "end":
-                    if element.tag in ("em", "strong", "u"):
+                    if element.tag in INLINE_FORMAT_TAGS:
                         if formatting_node is None:
                             formatting_node = Element('{%(w)s}rPr' % NAMESPACES)
-                        format_node = Element('{%s}%s' % (NAMESPACES["w"], HTML_TAG_MAPPING[element.tag]))
+                        format_node = Element('{%s}%s' % (NAMESPACES["w"], html_format_to_word_format(element.tag)))
                         if element.tag == "u":
                             format_node.set('{%(w)s}val' % NAMESPACES, "single")
                         formatting_node.append(format_node)
-                        format_stack.remove(element.tag)
+                        format_stack.remove(html_format_to_word_format(element.tag))
                         if not format_stack:
                             format_anchor.insert(0, formatting_node)
                             format_anchor = None
