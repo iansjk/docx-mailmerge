@@ -269,7 +269,7 @@ class MailMerge(object):
             current_run = Element('{%(w)s}r' % NAMESPACES)
             formatting_node = None
             text_node = Element('{%(w)s}t' % NAMESPACES, **{'{%(xml)s}space' % NAMESPACES: "preserve"})
-            context = etree.iterparse(BytesIO(html), html=True, events=("start", "end"))
+            context = etree.iterparse(BytesIO(html.encode("utf-8")), html=True, events=("start", "end"))
             for event, element in context:
                 if event == "start":
                     if element.text:
