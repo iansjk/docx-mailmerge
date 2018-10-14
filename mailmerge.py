@@ -21,6 +21,9 @@ CONTENT_TYPES_PARTS = (
 
 CONTENT_TYPE_SETTINGS = 'application/vnd.openxmlformats-officedocument.wordprocessingml.settings+xml'
 
+INLINE_FORMAT_TAGS = ("em", "i", "strong", "b", "u")
+
+
 def html_format_to_word_format(tag):
     if tag == "em":
         return "i"
@@ -28,7 +31,10 @@ def html_format_to_word_format(tag):
         return "b"
     return tag
 
-INLINE_FORMAT_TAGS = ("em", "i", "strong", "b", "u")
+
+def looks_like_html(text):
+    return re.search(r"<[^>]+>", text)
+
 
 class MailMerge(object):
     def __init__(self, file, remove_empty_tables=False):
@@ -173,14 +179,14 @@ class MailMerge(object):
             tag = root.tag
             if tag == '{%(w)s}ftr' % NAMESPACES or tag == '{%(w)s}hdr' % NAMESPACES:
                 continue
-		
+
             if sepClass == 'section':
 
                 #FINDING FIRST SECTION OF THE DOCUMENT
                 firstSection = root.find("w:body/w:p/w:pPr/w:sectPr", namespaces=NAMESPACES)
                 if firstSection == None:
                     firstSection = root.find("w:body/w:sectPr", namespaces=NAMESPACES)
-			
+
                 #MODIFY TYPE ATTRIBUTE OF FIRST SECTION FOR MERGING
                 nextPageSec = deepcopy(firstSection)
                 for child in nextPageSec:
@@ -248,10 +254,10 @@ class MailMerge(object):
          """
          warnings.warn("merge_pages has been deprecated in favour of merge_templates",
                       category=DeprecationWarning,
-                      stacklevel=2)         
+                      stacklevel=2)
          self.merge_templates(replacements, "page_break")
 
-    def merge(self, parts=None, html=False, **replacements):
+    def merge(self, parts=None, **replacements):
         if not parts:
             parts = self.parts.values()
 
@@ -260,7 +266,7 @@ class MailMerge(object):
                 self.merge_rows(field, replacement)
             else:
                 for part in parts:
-                    if html:
+                    if looks_like_html(replacement):
                         self.__merge_html_field(part, field, replacement)
                     else:
                         self.__merge_field(part, field, replacement)
